@@ -3,15 +3,17 @@ using MelonLoader.Utils;
 using Steamworks;
 
 
-[assembly: MelonInfo(typeof(WorkshopModLoader.WorkshopModLoaderPlugin), "Workshop Mod Loader", "1.0.0", "ASavageSwan")]
+[assembly: MelonInfo(typeof(DataCenter_SteamPlugin.WorkshopModLoaderPlugin), "Workshop Mod Loader", "1.0.0", "ASavageSwan")]
 [assembly: MelonGame("Waseku", "Data Center")]
 
-namespace WorkshopModLoader
+namespace DataCenter_SteamPlugin
 {
     public class WorkshopModLoaderPlugin : MelonPlugin
     {
         private const string APP_ID       = "4170200";
         private const int    TIMEOUT_SECS = 300; // 5 minutes
+        private DllsContext _dllsContext;
+        private ModLoader modLoader = new();
 
         private bool _weInitedSteam = false;
 
@@ -19,53 +21,27 @@ namespace WorkshopModLoader
         {
             // Subscribe as early as possible so the callback is in place
             // before OnPreModsLoaded fires later in the ML lifecycle.
+        
             MelonEvents.OnPreModsLoaded.Subscribe(OnPreModsLoaded);
         }
 
         public override void OnPreInitialization()
         {
-            LoggerInstance.Msg("=== Workshop Mod Loader starting ===");
-
-            // Phase 1: Download any pending items while we still have time
-            // before the Il2Cpp assembly generator runs.
-            // Steamworks isn't available yet so we init it ourselves,
-            // use it, then shut it down so the game can re-init normally.
-            bool steamReady = TryInitSteam();
-            if (steamReady)
-            {
-                try
-                {
-                    DownloadPendingWorkshopItems();
-                }
-                catch (Exception ex)
-                {
-                    LoggerInstance.Error($"Download phase failed: {ex.Message}");
-                }
-                finally
-                {
-                    if (_weInitedSteam)
-                    {
-                        LoggerInstance.Msg("Releasing our Steamworks session...");
-                        try { SteamAPI.Shutdown(); }
-                        catch (Exception ex) { LoggerInstance.Warning($"Shutdown warning (non-fatal): {ex.Message}"); }
-                        _weInitedSteam = false;
-                    }
-                }
-            }
-            else
-            {
-                LoggerInstance.Warning("Steamworks unavailable — skipping download check.");
-            }
-
-            LoggerInstance.Msg("Download phase complete. Workshop mods will be registered at mod load time.");
+            var steamWorkShop = new SteamWorkshop();
+            _dllsContext = steamWorkShop.Steam();
         }
 
+        private new void OnPreModsLoaded()
+        {
+         //   var modLoader = new ModLoader();
+            modLoader.LoadMods(_dllsContext);
+        }
         // ----------------------------------------------------------------
         // This fires at exactly the right moment:
         // AFTER  Il2Cpp interop setup
         // BEFORE MelonLoader scans the Mods/ folder
         // ----------------------------------------------------------------
-        private void OnPreModsLoaded()
+        private new void OnPreModsLoaded2()
         {
             LoggerInstance.Msg("Registering workshop mods with MelonLoader...");
 
