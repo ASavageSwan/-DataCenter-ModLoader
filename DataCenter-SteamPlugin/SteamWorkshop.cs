@@ -186,7 +186,7 @@ internal class SteamWorkshop
 
     private static void RegisterDllsForMelonLoading(DllsContext dlls)
     {
-        MelonLogger.Msg("Load Mod metadata into System");
+        MelonLogger.Msg("Load Mod metadata into Plugin");
         var workshopPath = FindWorkshopPath();
         if (workshopPath == null) return;
         
@@ -208,8 +208,6 @@ internal class SteamWorkshop
             
             ReadManifest(workshopPath, item.ToString(), dlls);
         }
-
-        return;
     }
     
     private static void ReadManifest(string workshopPath, string id, DllsContext dlls)
@@ -263,8 +261,8 @@ internal class SteamWorkshop
     {
         try
         {
-            var gameRoot     = MelonEnvironment.GameRootDirectory;
-            var steamApps    = Path.GetFullPath(Path.Combine(gameRoot, "..", ".."));
+            var gameRoot= MelonEnvironment.GameRootDirectory;
+            var steamApps= Path.GetFullPath(Path.Combine(gameRoot, "..", ".."));
             var workshopPath = Path.Combine(steamApps, "workshop", "content", AppID);
             MelonLogger.Msg($"Workshop path: {workshopPath}");
             return workshopPath;
