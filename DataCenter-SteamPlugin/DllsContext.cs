@@ -1,8 +1,8 @@
-﻿namespace DataCenter_SteamPlugin;
+namespace DataCenter_SteamPlugin;
 
 public class DllsContext
 {
-    public List<string> Mods { get; set; } = new();
-    public List<string> Libs { get; set; } = new();
-    public List<string> Plugins { get; set; } = new();
+    public List<string> Mods { get; init; } = new();
+    public List<string> Libs { get; init; } = new();
+    public List<string> Plugins { get; init; } = new();
 }

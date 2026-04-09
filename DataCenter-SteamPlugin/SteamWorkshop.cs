@@ -9,22 +9,20 @@ namespace DataCenter_SteamPlugin;
 
 internal class SteamWorkshop
 {
-    private static bool _steamworksRunning = false;
-    private const int TimeOut = 300; // 5 minutes
-    private DllsContext DllsContext = new();
-    private const string ManifestFileName = "manifest.json";
-    private static PublishedFileId_t[] subscribedIds;
     private const string AppID = "4170200";
-
+    private const string ManifestFileName = "manifest.json";
+    private const int TimeOut = 300; // 5 minutes
+    private static bool _steamworksRunning = false;
+    private static PublishedFileId_t[] _subscribedIds = Array.Empty<PublishedFileId_t>();
     
-    internal DllsContext Steam()
+    internal DllsContext Steam(DllsContext dlls)
     {
         if (TryInitSteam())
         {
             try
             {
                 DownloadPendingWorkshopItems();
-                RegisterDllsForMelonLoading();
+                RegisterDllsForMelonLoading(dlls);
             }
             catch (Exception ex)
             {
@@ -51,7 +49,7 @@ internal class SteamWorkshop
             MelonLogger.Warning("Steamworks unavailable — skipping download check.");
         }
         MelonLogger.Msg("Steam phase complete. Workshop mods will be registered at mod load time.");
-        return DllsContext;
+        return dlls;
     }
     
     private static bool TryInitSteam()
@@ -95,12 +93,12 @@ internal class SteamWorkshop
         }
         
         MelonLogger.Msg($"Found {subscribedCount} subscribed item(s). Checking state...");
-        subscribedIds = new PublishedFileId_t[subscribedCount];
-        SteamUGC.GetSubscribedItems(subscribedIds, subscribedCount);
+        _subscribedIds = new PublishedFileId_t[subscribedCount];
+        SteamUGC.GetSubscribedItems(_subscribedIds, subscribedCount);
         
         var needDownload = new List<PublishedFileId_t>();
         
-        foreach (var itemId in subscribedIds)
+        foreach (var itemId in _subscribedIds)
         {
             var state       = (EItemState)SteamUGC.GetItemState(itemId);
             var isInstalled       = (state & EItemState.k_EItemStateInstalled)   != 0;
@@ -186,7 +184,7 @@ internal class SteamWorkshop
         };
     }
 
-    private  void RegisterDllsForMelonLoading()
+    private static void RegisterDllsForMelonLoading(DllsContext dlls)
     {
         MelonLogger.Msg("Load Mod metadata into System");
         var workshopPath = FindWorkshopPath();
@@ -205,15 +203,16 @@ internal class SteamWorkshop
             return;
         }
         
-        foreach (var item in subscribedIds)
+        foreach (var item in _subscribedIds)
         {
             
-            ReadManifest(workshopPath, item.ToString());
+            ReadManifest(workshopPath, item.ToString(), dlls);
         }
+
+        return;
     }
-        
     
-    private void ReadManifest(string workshopPath, string id)
+    private static void ReadManifest(string workshopPath, string id, DllsContext dlls)
     {
         var manifestPath = Path.Combine(workshopPath, id, ManifestFileName);
         MelonLogger.Msg($"Reading Manifest file: {manifestPath}");
@@ -224,42 +223,39 @@ internal class SteamWorkshop
             DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
         };
         
-        var rawData = File.ReadAllText(manifestPath);
-        var data = JsonSerializer.Deserialize<Manifest>(rawData, options);
-
-        MelonLogger.Msg(data);
-        
-        MelonLogger.Msg($"Setting up Dlls to be loaded in for Mod: {data.Name}...");
-
-        if (data.Libs != null)
+        try
         {
+            var rawData = File.ReadAllText(manifestPath);
+            var data = JsonSerializer.Deserialize<Manifest>(rawData, options);
+            if (data == null)
+            {
+                MelonLogger.Warning($"Manifest deserialised to null, skipping: {manifestPath}");
+                return;
+            }
+
+            MelonLogger.Msg($"Setting up Dlls to be loaded in for Mod: {data.Name}...");
+
             foreach (var lib in data.Libs)
             {
                 MelonLogger.Msg($"Add lib to Load list: {lib}...");
-                var path = Path.Combine(workshopPath, id, lib);
-                DllsContext.Libs.Add(path);
+                dlls.Libs.Add(Path.Combine(workshopPath, id, lib));
             }
-        }
 
-
-        if (data.Mods != null)
-        {
             foreach (var mod in data.Mods)
             {
                 MelonLogger.Msg($"Add mod to Load list: {mod}...");
-                var path = Path.Combine(workshopPath, id, mod);
-                DllsContext.Mods.Add(path);
+                dlls.Mods.Add(Path.Combine(workshopPath, id, mod));
             }
-        }
 
-        if (data.Plugins != null)
-        {
             foreach (var plugin in data.Plugins)
             {
                 MelonLogger.Msg($"Add plugin to Load list: {plugin}...");
-                var path = Path.Combine(workshopPath, id, plugin);
-                DllsContext.Plugins.Add(path);
+                dlls.Plugins.Add(Path.Combine(workshopPath, id, plugin));
             }
+        }
+        catch (Exception ex)
+        {
+            MelonLogger.Warning($"Failed to read manifest for {id}: {ex.Message}");
         }
     }
     
@@ -267,9 +263,9 @@ internal class SteamWorkshop
     {
         try
         {
-            string gameRoot     = MelonEnvironment.GameRootDirectory;
-            string steamApps    = Path.GetFullPath(Path.Combine(gameRoot, "..", ".."));
-            string workshopPath = Path.Combine(steamApps, "workshop", "content", AppID);
+            var gameRoot     = MelonEnvironment.GameRootDirectory;
+            var steamApps    = Path.GetFullPath(Path.Combine(gameRoot, "..", ".."));
+            var workshopPath = Path.Combine(steamApps, "workshop", "content", AppID);
             MelonLogger.Msg($"Workshop path: {workshopPath}");
             return workshopPath;
         }
